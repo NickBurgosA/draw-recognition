@@ -5,8 +5,8 @@ import glob
 
 
 ancho = 65
-alto = 67
-resize = (1365,536)
+alto = 65
+resize = (1365,520)
 CLASS_N = 3
 
 # local modules
@@ -17,7 +17,6 @@ def split2d(img, cell_size, resize=None, flatten=True):
     h, w = img.shape[:2]
     print(h,w)
     sx, sy = cell_size
-    img = cv2.resize(img, resize)
     h, w = img.shape[:2]
     cells = [np.hsplit(row, w // sx) for row in np.vsplit(img, h // sy)]
     cells = np.array(cells)
@@ -27,13 +26,33 @@ def split2d(img, cell_size, resize=None, flatten=True):
 
 def load_images(fn):
     full_image = cv2.imread(fn, 0)
-    images = split2d(full_image, (ancho, alto), resize)
-    #labels = np.repeat(np.arange(CLASS_N), len(digits) / CLASS_N)
-    return images
+    images = split2d(full_image, (ancho, alto))
+    labels = np.repeat([0,1,2,3], len(images) / 4)
+    # ['apple', 'basketball', 'cake', 'cat'] = [0,1,2,3]
+    return images,labels
+
+def deskew(img):
+    m = cv2.moments(img)
+    if abs(m['mu02']) < 1e-2:
+        return img.copy()
+    skew = m['mu11'] / m['mu02']
+    M = np.float32([[1, skew, -0.5 * alto * skew], [0, 1, 0]])
+    img = cv2.warpAffine(img, M, (ancho, alto), flags=cv2.WARP_INVERSE_MAP | cv2.INTER_LINEAR)
+    return img
+
+def merge_images(src):
+    imagenes = []
+    for img in sorted(glob.glob(src)):
+        imagen = cv2.imread(img, 0)
+        imagen = cv2.resize(imagen, resize)
+        imagenes.append(imagen)
+
+    full = np.concatenate(imagenes, axis=0)
+    cv2.imwrite('full.png', full)
 
 class StatModel(object):
     def load(self, fn):
-        self.model.load(fn)  # Known bug: https://github.com/opencv/opencv/issues/4969
+        self.model.load(fn)
 
     def save(self, fn):
         self.model.save(fn)
@@ -53,7 +72,7 @@ class SVM(StatModel):
         return self.model.predict(samples)[1].ravel()
 
 
-def evaluate_model(model, digits, samples, labels):
+def evaluate_model(model, images, samples, labels):
     resp = model.predict(samples)
     err = (labels != resp).mean()
     print('Accuracy: %.2f %%' % ((1 - err) * 100))
@@ -65,7 +84,7 @@ def evaluate_model(model, digits, samples, labels):
     print(confusion)
 
     vis = []
-    for img, flag in zip(digits, resp == labels):
+    for img, flag in zip(images, resp == labels):
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
         if not flag:
             img[..., :2] = 0
@@ -73,19 +92,71 @@ def evaluate_model(model, digits, samples, labels):
         vis.append(img)
     return mosaic(25, vis)
 
+def calc_hog():
+    winSize = (65, 65)
+    blockSize = (10, 10)
+    blockStride = (5, 5)
+    cellSize = (10, 10)
+    nbins = 9
+    derivAperture = 1
+    winSigma = -1.
+    histogramNormType = 0
+    L2HysThreshold = 0.2
+    gammaCorrection = 1
+    nlevels = 64
+    signedGradient = True
 
-def preprocess_simple(digits):
-    return np.float32(digits).reshape(-1, SZ * SZ) / 255.0
+    hog = cv2.HOGDescriptor(winSize, blockSize, blockStride, cellSize, nbins, derivAperture, winSigma,
+                            histogramNormType, L2HysThreshold, gammaCorrection, nlevels, signedGradient)
+
+    return hog
+    affine_flags = cv2.WARP_INVERSE_MAP | cv2.INTER_LINEAR
+
+if __name__ == '__main__':
+
+    #merge_images('images/*.png')
+
+    print('Cargando imagenes desde full.png ... ')
+    images, labels = load_images('full.png')
+
+    print('Reordenar data ... ')
+    rand = np.random.RandomState(3)
+    shuffle = rand.permutation(len(images))
+    images, labels = images[shuffle], labels[shuffle]
+
+    #print('Alinear imagenes ... ')
+    images_deskewed = images
+
+
+    print('HOG')
+
+    hog = calc_hog()
+
+    print('Calculando el descriptor HOG para cada imagen ... ')
+    hog_descriptors = []
+    for img in images_deskewed:
+        hog_descriptors.append(hog.compute(img))
+    hog_descriptors = np.squeeze(hog_descriptors)
+
+    print('Dividiendo imagenes (90%) entrenamiento y test(10%)... ')
+    train_n = int(0.95 * len(hog_descriptors))
+    images_train, images_test = np.split(images_deskewed, [train_n])
+    hog_descriptors_train, hog_descriptors_test = np.split(hog_descriptors, [train_n])
+    labels_train, labels_test = np.split(labels, [train_n])
+
+    print('Training SVM model ...')
+    model = SVM()
+    model.train(hog_descriptors_train, labels_train)
+
+    print('Saving SVM model ...')
+    model.save('draws_svm.dat')
+
+    print('Evaluating model ... ')
+    vis = evaluate_model(model, images_test, hog_descriptors_test, labels_test)
+    cv2.imwrite("classification.jpg", vis)
+    cv2.imshow("Vis", vis)
+    cv2.waitKey(0)
 
 
 
-
-
-full_image = cv2.imread('images/basketball.2.png', 0)
-imagenes= load_images('images/basketball.2.png')
-cv2.imshow('title',imagenes[1])
-cv2.waitKey(0)
-cv2.destroyAllWindows()
-
-print(np.repeat('cat', len(imagenes)))
 
