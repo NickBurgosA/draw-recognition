@@ -2,6 +2,7 @@ import cv2
 
 import numpy as np
 import glob
+import os
 
 
 ancho = 65
@@ -71,16 +72,15 @@ class SVM(StatModel):
     def predict(self, samples):
         return self.model.predict(samples)[1].ravel()
 
-
 def evaluate_model(model, images, samples, labels):
     resp = model.predict(samples)
     err = (labels != resp).mean()
-    print('Accuracy: %.2f %%' % ((1 - err) * 100))
+    print('Precision: %.2f %%' % ((1 - err) * 100))
 
     confusion = np.zeros((10, 10), np.int32)
     for i, j in zip(labels, resp):
         confusion[int(i), int(j)] += 1
-    print('confusion matrix:')
+    print('Matriz de confusion:')
     print(confusion)
 
     vis = []
@@ -144,14 +144,18 @@ if __name__ == '__main__':
     hog_descriptors_train, hog_descriptors_test = np.split(hog_descriptors, [train_n])
     labels_train, labels_test = np.split(labels, [train_n])
 
-    print('Training SVM model ...')
     model = SVM()
+
+
+    print('Entrenando modelo SVM ...')
     model.train(hog_descriptors_train, labels_train)
 
-    print('Saving SVM model ...')
-    model.save('draws_svm.dat')
+    print('Guardando el modelo ...')
+    model.save('draws_svm.xml')
 
-    print('Evaluating model ... ')
+
+    print('Evaluando el modelo ... ')
+
     vis = evaluate_model(model, images_test, hog_descriptors_test, labels_test)
     cv2.imwrite("classification.jpg", vis)
     cv2.imshow("Vis", vis)
