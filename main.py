@@ -4,7 +4,6 @@ import numpy as np
 import glob
 import os
 
-
 ancho = 65
 alto = 65
 resize = (1365,520)
@@ -77,7 +76,7 @@ def evaluate_model(model, images, samples, labels):
     err = (labels != resp).mean()
     print('Precision: %.2f %%' % ((1 - err) * 100))
 
-    confusion = np.zeros((10, 10), np.int32)
+    confusion = np.zeros((4, 4), np.int32)
     for i, j in zip(labels, resp):
         confusion[int(i), int(j)] += 1
     print('Matriz de confusion:')
@@ -114,7 +113,7 @@ def calc_hog():
 
 if __name__ == '__main__':
 
-    #merge_images('images/*.png')
+    merge_images('images/*.png')
 
     print('Cargando imagenes desde full.png ... ')
     images, labels = load_images('full.png')
@@ -124,35 +123,32 @@ if __name__ == '__main__':
     shuffle = rand.permutation(len(images))
     images, labels = images[shuffle], labels[shuffle]
 
-    #print('Alinear imagenes ... ')
-    images_deskewed = images
-
-
     print('HOG')
 
     hog = calc_hog()
 
     print('Calculando el descriptor HOG para cada imagen ... ')
     hog_descriptors = []
-    for img in images_deskewed:
+    for img in images:
         hog_descriptors.append(hog.compute(img))
     hog_descriptors = np.squeeze(hog_descriptors)
 
     print('Dividiendo imagenes (90%) entrenamiento y test(10%)... ')
-    train_n = int(0.95 * len(hog_descriptors))
-    images_train, images_test = np.split(images_deskewed, [train_n])
+    train_n = int(0.90 * len(hog_descriptors))
+    images_train, images_test = np.split(images, [train_n])
     hog_descriptors_train, hog_descriptors_test = np.split(hog_descriptors, [train_n])
     labels_train, labels_test = np.split(labels, [train_n])
 
     model = SVM()
 
-
+    #if not os.path.isfile('draws_svm.dat'):
     print('Entrenando modelo SVM ...')
     model.train(hog_descriptors_train, labels_train)
 
     print('Guardando el modelo ...')
     model.save('draws_svm.xml')
-
+    #else:
+    model.load('draws_svm.dat')
 
     print('Evaluando el modelo ... ')
 
