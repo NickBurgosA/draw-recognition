@@ -31,14 +31,6 @@ def load_images(fn):
     # ['apple', 'basketball', 'cake', 'cat'] = [0,1,2,3]
     return images,labels
 
-def deskew(img):
-    m = cv2.moments(img)
-    if abs(m['mu02']) < 1e-2:
-        return img.copy()
-    skew = m['mu11'] / m['mu02']
-    M = np.float32([[1, skew, -0.5 * alto * skew], [0, 1, 0]])
-    img = cv2.warpAffine(img, M, (ancho, alto), flags=cv2.WARP_INVERSE_MAP | cv2.INTER_LINEAR)
-    return img
 
 def merge_images(src):
     imagenes = []
@@ -148,7 +140,7 @@ if __name__ == '__main__':
     print('Guardando el modelo ...')
     model.save('draws_svm.xml')
     #else:
-    model.load('draws_svm.dat')
+    #model.load('draws_svm.dat')
 
     print('Evaluando el modelo ... ')
 
