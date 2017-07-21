@@ -50,7 +50,7 @@ class StatModel(object):
         self.model.save(fn)
 
 class SVM(StatModel):
-    def __init__(self, C=12.5, gamma=0.50625):
+    def __init__(self, C=1, gamma=0.1):
         self.model = cv2.ml.SVM_create()
         self.model.setGamma(gamma)
         self.model.setC(C)
